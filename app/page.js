@@ -307,43 +307,158 @@ function ItemHistory({ item, onClose }) {
   )
 }
 
+function areaStats(items) {
+  const total = items.length
+  const received = items.filter(i => i.status !== 'no_recibido' && i.status !== 'sin_pedido').length
+  const delivered = items.filter(i => i.status === 'entregado_completo').length
+  const inWarehouse = items.filter(i => i.status === 'en_almacen' || i.status === 'entrega_parcial').length
+  const pctReceived = total ? Math.round((received / total) * 100) : 0
+  const pctDelivered = total ? Math.round((delivered / total) * 100) : 0
+  const byStatus = {}
+  for (const i of items) byStatus[i.status] = (byStatus[i.status] || 0) + 1
+  return { total, received, delivered, inWarehouse, pctReceived, pctDelivered, byStatus }
+}
+
+function AreaCard({ area, items, onClick }) {
+  const s = areaStats(items)
+  const allDone = s.pctDelivered === 100
+  const allReceived = s.pctReceived === 100
+
+  return (
+    <button onClick={onClick}
+      className="bg-white border rounded-xl p-4 text-left hover:shadow-md hover:border-blue-300 transition-all w-full">
+      <div className="font-semibold text-gray-800 mb-1 truncate">{area}</div>
+      <div className="text-xs text-gray-400 mb-3">{s.total} artículos</div>
+
+      <div className="space-y-1.5">
+        <div>
+          <div className="flex justify-between text-xs mb-0.5">
+            <span className="text-gray-500">Recibidos en almacén</span>
+            <span className={allReceived ? 'text-green-600 font-medium' : 'text-gray-600'}>{s.received}/{s.total}</span>
+          </div>
+          <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+            <div className={`h-full rounded-full ${allReceived ? 'bg-green-500' : 'bg-blue-500'}`}
+              style={{ width: `${s.pctReceived}%` }} />
+          </div>
+        </div>
+        <div>
+          <div className="flex justify-between text-xs mb-0.5">
+            <span className="text-gray-500">Entregados a Marriott</span>
+            <span className={allDone ? 'text-green-600 font-medium' : 'text-gray-600'}>{s.delivered}/{s.total}</span>
+          </div>
+          <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+            <div className={`h-full rounded-full ${allDone ? 'bg-green-500' : 'bg-emerald-400'}`}
+              style={{ width: `${s.pctDelivered}%` }} />
+          </div>
+        </div>
+      </div>
+
+      {s.inWarehouse > 0 && (
+        <div className="mt-2 text-xs text-blue-600 font-medium">{s.inWarehouse} listos para entregar</div>
+      )}
+      {allDone && (
+        <div className="mt-2 text-xs text-green-600 font-medium">✓ Completado</div>
+      )}
+    </button>
+  )
+}
+
+function ItemsTable({ items, onOpen }) {
+  return (
+    <div className="bg-white rounded-xl border overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b bg-gray-50">
+            <th className="text-left p-3 font-semibold">Código</th>
+            <th className="text-left p-3 font-semibold">Descripción</th>
+            <th className="text-left p-3 font-semibold hidden lg:table-cell">Marca</th>
+            <th className="text-center p-3 font-semibold">Pedido</th>
+            <th className="text-center p-3 font-semibold">Recibido</th>
+            <th className="text-center p-3 font-semibold">Almacén</th>
+            <th className="text-center p-3 font-semibold">Entregado</th>
+            <th className="text-center p-3 font-semibold">Status</th>
+            <th className="text-center p-3 font-semibold">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map(item => (
+            <tr key={item.item_id} className="border-b hover:bg-gray-50 transition-colors">
+              <td className="p-3 font-mono text-xs">{item.code}</td>
+              <td className="p-3">
+                <button onClick={() => onOpen(item, 'history')} className="text-left hover:text-blue-600">
+                  <div className="font-medium leading-tight">{item.description}</div>
+                  <div className="text-xs text-gray-400">{item.item_code}</div>
+                </button>
+              </td>
+              <td className="p-3 hidden lg:table-cell text-xs">{item.brand_current}</td>
+              <td className="p-3 text-center font-medium">{item.qty_ordered}</td>
+              <td className="p-3 text-center">{item.qty_received}</td>
+              <td className="p-3 text-center font-medium text-blue-600">{item.qty_in_warehouse}</td>
+              <td className="p-3 text-center">{item.qty_delivered}</td>
+              <td className="p-3 text-center"><StatusBadge status={item.status} /></td>
+              <td className="p-3 text-center whitespace-nowrap">
+                {item.qty_pending_arrival > 0 && (
+                  <button onClick={() => onOpen(item, 'receipt')}
+                    className="text-xs bg-blue-600 text-white px-2 py-1 rounded hover:bg-blue-700 mr-1">
+                    📦 Recibir
+                  </button>
+                )}
+                {item.qty_in_warehouse > 0 && (
+                  <button onClick={() => onOpen(item, 'delivery')}
+                    className="text-xs bg-green-600 text-white px-2 py-1 rounded hover:bg-green-700">
+                    🏨 Entregar
+                  </button>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 export default function Home() {
   const [items, setItems] = useState([])
-  const [areas, setAreas] = useState([])
   const [loading, setLoading] = useState(true)
+  const [view, setView] = useState('areas') // 'areas' | 'items'
+  const [selectedArea, setSelectedArea] = useState(null)
   const [search, setSearch] = useState('')
-  const [areaFilter, setAreaFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
-  const [typeFilter, setTypeFilter] = useState('')
   const [modalItem, setModalItem] = useState(null)
-  const [modalType, setModalType] = useState(null) // 'receipt' | 'delivery' | 'history'
-  const [stats, setStats] = useState({})
+  const [modalType, setModalType] = useState(null)
 
   const loadData = useCallback(async () => {
-    const { data, error } = await supabase.from('inventory_status').select('*').limit(5000)
-    if (error) { console.error(error); return }
-    setItems(data || [])
-
-    // Compute stats
-    const s = { total: 0, no_recibido: 0, recepcion_parcial: 0, en_almacen: 0, entrega_parcial: 0, entregado_completo: 0 }
-    for (const i of (data || [])) {
-      s.total++
-      if (s[i.status] !== undefined) s[i.status]++
+    let all = []
+    let from = 0
+    while (true) {
+      const { data, error } = await supabase.from('inventory_status').select('*').range(from, from + 999)
+      if (error) { console.error(error); break }
+      all = [...all, ...(data || [])]
+      if (!data || data.length < 1000) break
+      from += 1000
     }
-    setStats(s)
-
-    // Extract unique areas
-    const areaSet = [...new Set((data || []).map(i => i.area))].sort()
-    setAreas(areaSet)
+    setItems(all)
     setLoading(false)
   }, [])
 
   useEffect(() => { loadData() }, [loadData])
 
-  const filtered = items.filter(i => {
-    if (areaFilter && i.area !== areaFilter) return false
+  const areas = [...new Set(items.map(i => i.area).filter(Boolean))].sort()
+
+  const globalStats = {
+    total: items.length,
+    no_recibido: items.filter(i => i.status === 'no_recibido').length,
+    recepcion_parcial: items.filter(i => i.status === 'recepcion_parcial').length,
+    en_almacen: items.filter(i => i.status === 'en_almacen').length,
+    entrega_parcial: items.filter(i => i.status === 'entrega_parcial').length,
+    entregado_completo: items.filter(i => i.status === 'entregado_completo').length,
+  }
+
+  const areaItems = selectedArea ? items.filter(i => i.area === selectedArea) : []
+
+  const filteredAreaItems = areaItems.filter(i => {
     if (statusFilter && i.status !== statusFilter) return false
-    if (typeFilter && i.item_type !== typeFilter) return false
     if (search) {
       const q = search.toLowerCase()
       return (
@@ -356,7 +471,19 @@ export default function Home() {
     return true
   })
 
-  const itemTypes = [...new Set(items.map(i => i.item_type).filter(Boolean))].sort()
+  function openArea(area) {
+    setSelectedArea(area)
+    setSearch('')
+    setStatusFilter('')
+    setView('items')
+  }
+
+  function backToAreas() {
+    setView('areas')
+    setSelectedArea(null)
+    setSearch('')
+    setStatusFilter('')
+  }
 
   function openModal(item, type) {
     setModalItem(item)
@@ -382,111 +509,123 @@ export default function Home() {
   return (
     <div className="max-w-7xl mx-auto px-4 py-6">
       {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">OSE Tracker</h1>
-        <p className="text-gray-500">St. Regis Costa Mujeres — Control de recepción y entrega</p>
+      <div className="mb-6 flex items-start justify-between">
+        <div>
+          {view === 'items' ? (
+            <div>
+              <button onClick={backToAreas} className="text-sm text-blue-600 hover:underline mb-1 flex items-center gap-1">
+                ← Todas las áreas
+              </button>
+              <h1 className="text-2xl font-bold text-gray-900">{selectedArea}</h1>
+              <p className="text-gray-500 text-sm">{areaItems.length} artículos en esta área</p>
+            </div>
+          ) : (
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">OSE Tracker</h1>
+              <p className="text-gray-500">St. Regis Costa Mujeres — Control de recepción y entrega</p>
+            </div>
+          )}
+        </div>
+        <div className="text-right text-xs text-gray-400 mt-1">
+          {globalStats.total} artículos totales
+        </div>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
-        <StatCard label="Total artículos" value={stats.total} color="bg-white border"
-          onClick={() => setStatusFilter('')} active={!statusFilter} />
-        <StatCard label="No recibido" value={stats.no_recibido} color="bg-red-50 border border-red-200"
-          onClick={() => setStatusFilter(statusFilter === 'no_recibido' ? '' : 'no_recibido')} active={statusFilter === 'no_recibido'} />
-        <StatCard label="Recepción parcial" value={stats.recepcion_parcial} color="bg-amber-50 border border-amber-200"
-          onClick={() => setStatusFilter(statusFilter === 'recepcion_parcial' ? '' : 'recepcion_parcial')} active={statusFilter === 'recepcion_parcial'} />
-        <StatCard label="En almacén" value={stats.en_almacen} color="bg-blue-50 border border-blue-200"
-          onClick={() => setStatusFilter(statusFilter === 'en_almacen' ? '' : 'en_almacen')} active={statusFilter === 'en_almacen'} />
-        <StatCard label="Entrega parcial" value={stats.entrega_parcial} color="bg-emerald-50 border border-emerald-200"
-          onClick={() => setStatusFilter(statusFilter === 'entrega_parcial' ? '' : 'entrega_parcial')} active={statusFilter === 'entrega_parcial'} />
-        <StatCard label="Entregado" value={stats.entregado_completo} color="bg-green-100 border border-green-300"
-          onClick={() => setStatusFilter(statusFilter === 'entregado_completo' ? '' : 'entregado_completo')} active={statusFilter === 'entregado_completo'} />
+      {/* Global stats (always visible) */}
+      <div className="grid grid-cols-3 md:grid-cols-6 gap-2 mb-6">
+        <div className="bg-white border rounded-lg p-3 text-center">
+          <div className="text-xl font-bold">{globalStats.total}</div>
+          <div className="text-xs text-gray-500">Total</div>
+        </div>
+        <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-center">
+          <div className="text-xl font-bold text-red-700">{globalStats.no_recibido}</div>
+          <div className="text-xs text-red-500">No recibido</div>
+        </div>
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-center">
+          <div className="text-xl font-bold text-amber-700">{globalStats.recepcion_parcial}</div>
+          <div className="text-xs text-amber-500">Rec. parcial</div>
+        </div>
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-center">
+          <div className="text-xl font-bold text-blue-700">{globalStats.en_almacen}</div>
+          <div className="text-xs text-blue-500">En almacén</div>
+        </div>
+        <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-center">
+          <div className="text-xl font-bold text-emerald-700">{globalStats.entrega_parcial}</div>
+          <div className="text-xs text-emerald-500">Entrega parcial</div>
+        </div>
+        <div className="bg-green-100 border border-green-300 rounded-lg p-3 text-center">
+          <div className="text-xl font-bold text-green-700">{globalStats.entregado_completo}</div>
+          <div className="text-xs text-green-600">Entregado</div>
+        </div>
       </div>
 
-      {/* Filters */}
-      <div className="bg-white rounded-xl border p-4 mb-4 flex flex-col md:flex-row gap-3">
-        <input
-          type="text"
-          placeholder="Buscar por código, descripción o marca..."
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          className="flex-1 border rounded-lg px-3 py-2 text-sm"
-        />
-        <select value={areaFilter} onChange={e => setAreaFilter(e.target.value)}
-          className="border rounded-lg px-3 py-2 text-sm min-w-[180px]">
-          <option value="">Todas las áreas</option>
-          {areas.map(a => <option key={a} value={a}>{a}</option>)}
-        </select>
-        <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}
-          className="border rounded-lg px-3 py-2 text-sm min-w-[150px]">
-          <option value="">Todos los tipos</option>
-          {itemTypes.map(t => <option key={t} value={t}>{t}</option>)}
-        </select>
-      </div>
+      {view === 'areas' && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+          {areas.map(area => (
+            <AreaCard
+              key={area}
+              area={area}
+              items={items.filter(i => i.area === area)}
+              onClick={() => openArea(area)}
+            />
+          ))}
+        </div>
+      )}
 
-      {/* Results count */}
-      <div className="text-sm text-gray-500 mb-3">{filtered.length} artículos</div>
+      {view === 'items' && (
+        <>
+          {/* Area status bar */}
+          {(() => {
+            const s = areaStats(areaItems)
+            return (
+              <div className="bg-white border rounded-xl p-4 mb-4 flex flex-wrap gap-4 items-center">
+                <div className="flex-1 min-w-[200px]">
+                  <div className="flex justify-between text-xs mb-1">
+                    <span className="text-gray-500">Recibidos en almacén</span>
+                    <span className="font-medium">{s.received}/{s.total} ({s.pctReceived}%)</span>
+                  </div>
+                  <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                    <div className="h-full bg-blue-500 rounded-full" style={{ width: `${s.pctReceived}%` }} />
+                  </div>
+                </div>
+                <div className="flex-1 min-w-[200px]">
+                  <div className="flex justify-between text-xs mb-1">
+                    <span className="text-gray-500">Entregados a Marriott</span>
+                    <span className="font-medium">{s.delivered}/{s.total} ({s.pctDelivered}%)</span>
+                  </div>
+                  <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                    <div className="h-full bg-green-500 rounded-full" style={{ width: `${s.pctDelivered}%` }} />
+                  </div>
+                </div>
+              </div>
+            )
+          })()}
 
-      {/* Table */}
-      <div className="bg-white rounded-xl border overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b bg-gray-50">
-              <th className="text-left p-3 font-semibold">Código</th>
-              <th className="text-left p-3 font-semibold">Descripción</th>
-              <th className="text-left p-3 font-semibold hidden md:table-cell">Área</th>
-              <th className="text-left p-3 font-semibold hidden lg:table-cell">Marca</th>
-              <th className="text-center p-3 font-semibold">Pedido</th>
-              <th className="text-center p-3 font-semibold">Recibido</th>
-              <th className="text-center p-3 font-semibold">Almacén</th>
-              <th className="text-center p-3 font-semibold">Entregado</th>
-              <th className="text-center p-3 font-semibold">Status</th>
-              <th className="text-center p-3 font-semibold">Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.slice(0, 200).map(item => (
-              <tr key={item.item_id} className="border-b hover:bg-gray-50 transition-colors">
-                <td className="p-3 font-mono text-xs">{item.code}</td>
-                <td className="p-3">
-                  <button onClick={() => openModal(item, 'history')} className="text-left hover:text-blue-600">
-                    <div className="font-medium">{item.description}</div>
-                    <div className="text-xs text-gray-400 hidden md:block">{item.item_code}</div>
-                  </button>
-                </td>
-                <td className="p-3 hidden md:table-cell text-xs">{item.area}</td>
-                <td className="p-3 hidden lg:table-cell text-xs">{item.brand_current}</td>
-                <td className="p-3 text-center font-medium">{item.qty_ordered}</td>
-                <td className="p-3 text-center">{item.qty_received}</td>
-                <td className="p-3 text-center font-medium text-blue-600">{item.qty_in_warehouse}</td>
-                <td className="p-3 text-center">{item.qty_delivered}</td>
-                <td className="p-3 text-center"><StatusBadge status={item.status} /></td>
-                <td className="p-3 text-center whitespace-nowrap">
-                  {item.qty_pending_arrival > 0 && (
-                    <button onClick={() => openModal(item, 'receipt')}
-                      className="text-xs bg-blue-600 text-white px-2 py-1 rounded hover:bg-blue-700 mr-1"
-                      title="Registrar recepción en almacén">
-                      📦 Recibir
-                    </button>
-                  )}
-                  {item.qty_in_warehouse > 0 && (
-                    <button onClick={() => openModal(item, 'delivery')}
-                      className="text-xs bg-green-600 text-white px-2 py-1 rounded hover:bg-green-700"
-                      title="Registrar entrega a Marriott">
-                      🏨 Entregar
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {filtered.length > 200 && (
-          <div className="p-4 text-center text-sm text-gray-500">
-            Mostrando 200 de {filtered.length} — usa los filtros para refinar
+          {/* Filters */}
+          <div className="bg-white rounded-xl border p-3 mb-4 flex flex-col sm:flex-row gap-3">
+            <input
+              type="text"
+              placeholder="Buscar por código, descripción o marca..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="flex-1 border rounded-lg px-3 py-2 text-sm"
+            />
+            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
+              className="border rounded-lg px-3 py-2 text-sm min-w-[180px]">
+              <option value="">Todos los estados</option>
+              {Object.entries(STATUS_LABELS).map(([k, v]) => (
+                <option key={k} value={k}>{v}</option>
+              ))}
+            </select>
           </div>
-        )}
-      </div>
+
+          <div className="text-sm text-gray-500 mb-3">
+            {filteredAreaItems.length} artículos{search || statusFilter ? ' (filtrados)' : ''}
+          </div>
+
+          <ItemsTable items={filteredAreaItems} onOpen={openModal} />
+        </>
+      )}
 
       {/* Modal */}
       <Modal
