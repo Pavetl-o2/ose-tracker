@@ -448,11 +448,13 @@ export default function Home() {
 
   const globalStats = {
     total: items.length,
+    sin_pedido: items.filter(i => i.status === 'sin_pedido').length,
     no_recibido: items.filter(i => i.status === 'no_recibido').length,
     recepcion_parcial: items.filter(i => i.status === 'recepcion_parcial').length,
     en_almacen: items.filter(i => i.status === 'en_almacen').length,
     entrega_parcial: items.filter(i => i.status === 'entrega_parcial').length,
     entregado_completo: items.filter(i => i.status === 'entregado_completo').length,
+    revisar: items.filter(i => i.status === 'revisar').length,
   }
 
   const areaItems = selectedArea ? items.filter(i => i.area === selectedArea) : []
@@ -532,11 +534,17 @@ export default function Home() {
       </div>
 
       {/* Global stats (always visible) */}
-      <div className="grid grid-cols-3 md:grid-cols-6 gap-2 mb-6">
+      <div className="grid grid-cols-4 md:grid-cols-8 gap-2 mb-6">
         <div className="bg-white border rounded-lg p-3 text-center">
           <div className="text-xl font-bold">{globalStats.total}</div>
           <div className="text-xs text-gray-500">Total</div>
         </div>
+        {globalStats.sin_pedido > 0 && (
+          <div className="bg-gray-100 border rounded-lg p-3 text-center">
+            <div className="text-xl font-bold text-gray-600">{globalStats.sin_pedido}</div>
+            <div className="text-xs text-gray-500">Sin pedido</div>
+          </div>
+        )}
         <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-center">
           <div className="text-xl font-bold text-red-700">{globalStats.no_recibido}</div>
           <div className="text-xs text-red-500">No recibido</div>
@@ -557,6 +565,12 @@ export default function Home() {
           <div className="text-xl font-bold text-green-700">{globalStats.entregado_completo}</div>
           <div className="text-xs text-green-600">Entregado</div>
         </div>
+        {globalStats.revisar > 0 && (
+          <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 text-center">
+            <div className="text-xl font-bold text-purple-700">{globalStats.revisar}</div>
+            <div className="text-xs text-purple-500">Revisar</div>
+          </div>
+        )}
       </div>
 
       {view === 'areas' && (
