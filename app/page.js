@@ -63,12 +63,22 @@ function ReceiptForm({ item, onClose, onSaved }) {
   const [invoiceRef, setInvoiceRef] = useState('')
   const [notes, setNotes] = useState('')
   const [date, setDate] = useState(new Date().toISOString().split('T')[0])
+  const [file, setFile] = useState(null)
   const [saving, setSaving] = useState(false)
 
   async function handleSubmit(e) {
     e.preventDefault()
     if (!qty || parseInt(qty) <= 0) return
     setSaving(true)
+
+    let document_url = null
+    if (file) {
+      const path = `receipts/${Date.now()}_${file.name}`
+      const { error: uploadError } = await supabase.storage.from('documents').upload(path, file)
+      if (uploadError) { setSaving(false); alert('Error subiendo archivo: ' + uploadError.message); return }
+      document_url = supabase.storage.from('documents').getPublicUrl(path).data.publicUrl
+    }
+
     const { error } = await supabase.from('receipts').insert({
       item_id: item.item_id,
       qty_received: parseInt(qty),
@@ -76,6 +86,7 @@ function ReceiptForm({ item, onClose, onSaved }) {
       received_by: receivedBy || null,
       invoice_ref: invoiceRef || null,
       notes: notes || null,
+      document_url,
     })
     setSaving(false)
     if (error) { alert('Error: ' + error.message); return }
@@ -116,6 +127,11 @@ function ReceiptForm({ item, onClose, onSaved }) {
         <textarea value={notes} onChange={e => setNotes(e.target.value)}
           className="w-full border rounded-lg px-3 py-2" rows={2} />
       </div>
+      <div>
+        <label className="block text-sm font-medium mb-1">Firma de recibido del almacenista</label>
+        <input type="file" accept="image/*,.pdf" onChange={e => setFile(e.target.files[0] || null)}
+          className="w-full border rounded-lg px-3 py-2 text-sm" />
+      </div>
       <div className="flex gap-3 pt-2">
         <button type="submit" disabled={saving}
           className="flex-1 bg-blue-600 text-white rounded-lg py-2.5 font-medium hover:bg-blue-700 disabled:opacity-50">
@@ -133,12 +149,22 @@ function DeliveryForm({ item, onClose, onSaved }) {
   const [receivedByMarriott, setReceivedByMarriott] = useState('')
   const [notes, setNotes] = useState('')
   const [date, setDate] = useState(new Date().toISOString().split('T')[0])
+  const [file, setFile] = useState(null)
   const [saving, setSaving] = useState(false)
 
   async function handleSubmit(e) {
     e.preventDefault()
     if (!qty || parseInt(qty) <= 0) return
     setSaving(true)
+
+    let document_url = null
+    if (file) {
+      const path = `deliveries/${Date.now()}_${file.name}`
+      const { error: uploadError } = await supabase.storage.from('documents').upload(path, file)
+      if (uploadError) { setSaving(false); alert('Error subiendo archivo: ' + uploadError.message); return }
+      document_url = supabase.storage.from('documents').getPublicUrl(path).data.publicUrl
+    }
+
     const { error } = await supabase.from('deliveries').insert({
       item_id: item.item_id,
       qty_delivered: parseInt(qty),
@@ -146,6 +172,7 @@ function DeliveryForm({ item, onClose, onSaved }) {
       delivered_by: deliveredBy || null,
       received_by_marriott: receivedByMarriott || null,
       notes: notes || null,
+      document_url,
     })
     setSaving(false)
     if (error) { alert('Error: ' + error.message); return }
@@ -185,6 +212,11 @@ function DeliveryForm({ item, onClose, onSaved }) {
         <label className="block text-sm font-medium mb-1">Notas</label>
         <textarea value={notes} onChange={e => setNotes(e.target.value)}
           className="w-full border rounded-lg px-3 py-2" rows={2} />
+      </div>
+      <div>
+        <label className="block text-sm font-medium mb-1">Remisión firmada por Marriott</label>
+        <input type="file" accept="image/*,.pdf" onChange={e => setFile(e.target.files[0] || null)}
+          className="w-full border rounded-lg px-3 py-2 text-sm" />
       </div>
       <div className="flex gap-3 pt-2">
         <button type="submit" disabled={saving}
@@ -236,6 +268,12 @@ function ItemHistory({ item, onClose }) {
                 {r.received_by && <div className="text-gray-500">Recibió: {r.received_by}</div>}
                 {r.invoice_ref && <div className="text-gray-500">Ref: {r.invoice_ref}</div>}
                 {r.notes && <div className="text-gray-400 mt-1">{r.notes}</div>}
+                {r.document_url && (
+                  <a href={r.document_url} target="_blank" rel="noopener noreferrer"
+                    className="inline-block mt-1 text-blue-600 hover:underline">
+                    📎 Ver documento
+                  </a>
+                )}
               </div>
             ))}
           </div>
@@ -254,6 +292,12 @@ function ItemHistory({ item, onClose }) {
                 {d.delivered_by && <div className="text-gray-500">Entregó: {d.delivered_by}</div>}
                 {d.received_by_marriott && <div className="text-gray-500">Recibió Marriott: {d.received_by_marriott}</div>}
                 {d.notes && <div className="text-gray-400 mt-1">{d.notes}</div>}
+                {d.document_url && (
+                  <a href={d.document_url} target="_blank" rel="noopener noreferrer"
+                    className="inline-block mt-1 text-blue-600 hover:underline">
+                    📎 Ver documento
+                  </a>
+                )}
               </div>
             ))}
           </div>
@@ -276,7 +320,7 @@ export default function Home() {
   const [stats, setStats] = useState({})
 
   const loadData = useCallback(async () => {
-    const { data, error } = await supabase.from('inventory_status').select('*')
+    const { data, error } = await supabase.from('inventory_status').select('*').limit(5000)
     if (error) { console.error(error); return }
     setItems(data || [])
 
