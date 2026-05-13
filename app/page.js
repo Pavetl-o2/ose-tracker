@@ -253,7 +253,8 @@ function ItemHistory({ item, onClose }) {
     <div className="space-y-4">
       <div className="bg-gray-50 rounded-lg p-3 text-sm">
         <div className="font-medium">{item.code} — {item.description}</div>
-        <div className="text-gray-500">{item.area} | Pedido: {item.qty_ordered}</div>
+        <div className="text-gray-500">{item.area} | Marca: {item.brand_current} | Proveedor: {item.supplier}</div>
+        <div className="text-gray-500">Pedido: {item.qty_ordered}</div>
       </div>
       <div>
         <h3 className="font-semibold text-blue-700 mb-2">📦 Recepciones en almacén ({receipts.length})</h3>
@@ -363,6 +364,91 @@ function AreaCard({ area, items, onClick }) {
   )
 }
 
+function EditItemForm({ item, onClose, onSaved }) {
+  const [fields, setFields] = useState({
+    code: item.code || '',
+    item_code: item.item_code || '',
+    description: item.description || '',
+    description_2: item.description_2 || '',
+    brand_current: item.brand_current || '',
+    supplier: item.supplier || '',
+    unit: item.unit || '',
+    qty_ordered: item.qty_ordered ?? '',
+    category: item.category || '',
+    item_type: item.item_type || '',
+    price_unit: item.price_unit ?? '',
+    currency: item.currency || '',
+    notes: item.notes || '',
+  })
+  const [saving, setSaving] = useState(false)
+
+  function set(key) {
+    return e => setFields(f => ({ ...f, [key]: e.target.value }))
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setSaving(true)
+    const payload = {
+      ...fields,
+      qty_ordered: fields.qty_ordered !== '' ? Number(fields.qty_ordered) : null,
+      price_unit: fields.price_unit !== '' ? Number(fields.price_unit) : null,
+    }
+    const { error } = await supabase.from('items').update(payload).eq('id', item.item_id)
+    setSaving(false)
+    if (error) { alert('Error: ' + error.message); return }
+    onSaved()
+    onClose()
+  }
+
+  const row = (label, key, type = 'text', extra = {}) => (
+    <div>
+      <label className="block text-sm font-medium mb-1">{label}</label>
+      <input type={type} value={fields[key]} onChange={set(key)}
+        className="w-full border rounded-lg px-3 py-2 text-sm" {...extra} />
+    </div>
+  )
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-3">
+      <div className="grid grid-cols-2 gap-3">
+        {row('Código', 'code')}
+        {row('Item Code', 'item_code')}
+      </div>
+      {row('Descripción', 'description')}
+      {row('Descripción 2', 'description_2')}
+      <div className="grid grid-cols-2 gap-3">
+        {row('Marca', 'brand_current')}
+        {row('Proveedor', 'supplier')}
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        {row('Unidad', 'unit')}
+        {row('Cantidad pedida', 'qty_ordered', 'number', { min: 0 })}
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        {row('Categoría', 'category')}
+        {row('Tipo', 'item_type')}
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        {row('Precio unitario', 'price_unit', 'number', { step: '0.01', min: 0 })}
+        {row('Moneda', 'currency')}
+      </div>
+      <div>
+        <label className="block text-sm font-medium mb-1">Notas</label>
+        <textarea value={fields.notes} onChange={set('notes')}
+          className="w-full border rounded-lg px-3 py-2 text-sm" rows={2} />
+      </div>
+      <div className="flex gap-3 pt-2">
+        <button type="submit" disabled={saving}
+          className="flex-1 bg-blue-600 text-white rounded-lg py-2.5 font-medium hover:bg-blue-700 disabled:opacity-50">
+          {saving ? 'Guardando...' : 'Guardar cambios'}
+        </button>
+        <button type="button" onClick={onClose} className="px-4 py-2.5 border rounded-lg hover:bg-gray-50">Cancelar</button>
+      </div>
+    </form>
+  )
+}
+
 function ItemsTable({ items, onOpen }) {
   return (
     <div className="bg-white rounded-xl border overflow-x-auto">
@@ -372,6 +458,7 @@ function ItemsTable({ items, onOpen }) {
             <th className="text-left p-3 font-semibold">Código</th>
             <th className="text-left p-3 font-semibold">Descripción</th>
             <th className="text-left p-3 font-semibold hidden lg:table-cell">Marca</th>
+            <th className="text-left p-3 font-semibold hidden lg:table-cell">Proveedor</th>
             <th className="text-center p-3 font-semibold">Pedido</th>
             <th className="text-center p-3 font-semibold">Recibido</th>
             <th className="text-center p-3 font-semibold">Almacén</th>
@@ -391,12 +478,18 @@ function ItemsTable({ items, onOpen }) {
                 </button>
               </td>
               <td className="p-3 hidden lg:table-cell text-xs">{item.brand_current}</td>
+              <td className="p-3 hidden lg:table-cell text-xs">{item.supplier}</td>
               <td className="p-3 text-center font-medium">{item.qty_ordered}</td>
               <td className="p-3 text-center">{item.qty_received}</td>
               <td className="p-3 text-center font-medium text-blue-600">{item.qty_in_warehouse}</td>
               <td className="p-3 text-center">{item.qty_delivered}</td>
               <td className="p-3 text-center"><StatusBadge status={item.status} /></td>
               <td className="p-3 text-center whitespace-nowrap">
+                <button onClick={() => onOpen(item, 'edit')}
+                  className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded hover:bg-gray-200 mr-1"
+                  title="Editar artículo">
+                  ✏️
+                </button>
                 {item.qty_pending_arrival > 0 && (
                   <button onClick={() => onOpen(item, 'receipt')}
                     className="text-xs bg-blue-600 text-white px-2 py-1 rounded hover:bg-blue-700 mr-1">
@@ -467,7 +560,8 @@ export default function Home() {
         (i.code || '').toLowerCase().includes(q) ||
         (i.description || '').toLowerCase().includes(q) ||
         (i.brand_current || '').toLowerCase().includes(q) ||
-        (i.item_code || '').toLowerCase().includes(q)
+        (i.item_code || '').toLowerCase().includes(q) ||
+        (i.supplier || '').toLowerCase().includes(q)
       )
     }
     return true
@@ -619,7 +713,7 @@ export default function Home() {
           <div className="bg-white rounded-xl border p-3 mb-4 flex flex-col sm:flex-row gap-3">
             <input
               type="text"
-              placeholder="Buscar por código, descripción o marca..."
+              placeholder="Buscar por código, descripción, marca o proveedor..."
               value={search}
               onChange={e => setSearch(e.target.value)}
               className="flex-1 border rounded-lg px-3 py-2 text-sm"
@@ -648,6 +742,7 @@ export default function Home() {
         title={
           modalType === 'receipt' ? '📦 Registrar recepción en almacén' :
           modalType === 'delivery' ? '🏨 Registrar entrega a Marriott' :
+          modalType === 'edit' ? '✏️ Editar artículo' :
           '📋 Historial de movimientos'
         }
       >
@@ -656,6 +751,9 @@ export default function Home() {
         )}
         {modalItem && modalType === 'delivery' && (
           <DeliveryForm item={modalItem} onClose={closeModal} onSaved={loadData} />
+        )}
+        {modalItem && modalType === 'edit' && (
+          <EditItemForm item={modalItem} onClose={closeModal} onSaved={loadData} />
         )}
         {modalItem && modalType === 'history' && (
           <ItemHistory item={modalItem} onClose={closeModal} />
