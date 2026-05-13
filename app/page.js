@@ -42,11 +42,11 @@ function StatCard({ label, value, color, onClick, active }) {
   )
 }
 
-function Modal({ open, onClose, title, children }) {
+function Modal({ open, onClose, title, children, wide }) {
   if (!open) return null
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
+      <div className={`bg-white rounded-2xl shadow-2xl ${wide ? 'max-w-3xl' : 'max-w-lg'} w-full max-h-[90vh] overflow-y-auto p-6`} onClick={e => e.stopPropagation()}>
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-lg font-bold">{title}</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
@@ -229,6 +229,264 @@ function DeliveryForm({ item, onClose, onSaved }) {
   )
 }
 
+function BatchReceiptForm({ items, area, onClose, onSaved }) {
+  const eligible = items.filter(i => i.qty_pending_arrival > 0)
+  const [selected, setSelected] = useState(() => Object.fromEntries(eligible.map(i => [i.item_id, true])))
+  const [qtys, setQtys] = useState(() => Object.fromEntries(eligible.map(i => [i.item_id, i.qty_pending_arrival])))
+  const [date, setDate] = useState(new Date().toISOString().split('T')[0])
+  const [receivedBy, setReceivedBy] = useState('')
+  const [invoiceRef, setInvoiceRef] = useState('')
+  const [file, setFile] = useState(null)
+  const [notes, setNotes] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  const selectedItems = eligible.filter(i => selected[i.item_id])
+  const totalQty = selectedItems.reduce((sum, i) => sum + (parseInt(qtys[i.item_id]) || 0), 0)
+  const allSelected = eligible.length > 0 && eligible.every(i => selected[i.item_id])
+
+  function toggleAll() {
+    const v = !allSelected
+    setSelected(Object.fromEntries(eligible.map(i => [i.item_id, v])))
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    if (selectedItems.length === 0) { alert('Selecciona al menos un artículo'); return }
+    setSaving(true)
+
+    let document_url = null
+    if (file) {
+      const path = `receipt-batches/${Date.now()}_${file.name}`
+      const { error: uploadError } = await supabase.storage.from('documents').upload(path, file)
+      if (uploadError) { setSaving(false); alert('Error subiendo archivo: ' + uploadError.message); return }
+      document_url = supabase.storage.from('documents').getPublicUrl(path).data.publicUrl
+    }
+
+    const { data: batchData, error: batchError } = await supabase
+      .from('receipt_batches')
+      .insert({ received_date: date, received_by: receivedBy || null, invoice_ref: invoiceRef || null, document_url, notes: notes || null })
+      .select('id').single()
+    if (batchError) { setSaving(false); alert('Error creando lote: ' + batchError.message); return }
+
+    const { error: receiptsError } = await supabase.from('receipts').insert(
+      selectedItems.map(i => ({
+        item_id: i.item_id,
+        qty_received: parseInt(qtys[i.item_id]) || 0,
+        received_date: date,
+        received_by: receivedBy || null,
+        invoice_ref: invoiceRef || null,
+        batch_id: batchData.id,
+        document_url,
+      }))
+    )
+    setSaving(false)
+    if (receiptsError) { alert('Error guardando recepciones: ' + receiptsError.message); return }
+    onSaved(); onClose()
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div>
+        <div className="flex justify-between items-center mb-2">
+          <span className="text-sm font-medium text-gray-700">Artículos con pendiente ({eligible.length})</span>
+          <button type="button" onClick={toggleAll} className="text-xs text-blue-600 hover:underline">
+            {allSelected ? 'Deseleccionar todos' : 'Seleccionar todos'}
+          </button>
+        </div>
+        <div className="border rounded-lg divide-y max-h-60 overflow-y-auto">
+          {eligible.length === 0
+            ? <p className="text-sm text-gray-400 p-3">No hay artículos con pendiente de llegada</p>
+            : eligible.map(item => (
+              <div key={item.item_id} className="flex items-center gap-3 p-2.5">
+                <input type="checkbox" checked={!!selected[item.item_id]}
+                  onChange={e => setSelected(s => ({ ...s, [item.item_id]: e.target.checked }))}
+                  className="h-4 w-4 rounded border-gray-300 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium truncate">{item.description}</div>
+                  <div className="text-xs text-gray-400">{item.code} · Pendiente: {item.qty_pending_arrival}</div>
+                </div>
+                <input type="number" min="1" max={item.qty_pending_arrival}
+                  value={qtys[item.item_id] ?? ''}
+                  onChange={e => setQtys(q => ({ ...q, [item.item_id]: e.target.value }))}
+                  disabled={!selected[item.item_id]}
+                  className="w-20 border rounded px-2 py-1 text-sm text-center disabled:opacity-40 shrink-0" />
+              </div>
+            ))
+          }
+        </div>
+      </div>
+
+      <div className="bg-blue-50 rounded-lg px-3 py-2 text-sm text-blue-700 font-medium">
+        {selectedItems.length} artículos seleccionados · {totalQty} unidades totales
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="block text-sm font-medium mb-1">Fecha de recepción</label>
+          <input type="date" value={date} onChange={e => setDate(e.target.value)}
+            className="w-full border rounded-lg px-3 py-2 text-sm" />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Recibió</label>
+          <input type="text" value={receivedBy} onChange={e => setReceivedBy(e.target.value)}
+            className="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Nombre" />
+        </div>
+      </div>
+      <div>
+        <label className="block text-sm font-medium mb-1">Referencia factura</label>
+        <input type="text" value={invoiceRef} onChange={e => setInvoiceRef(e.target.value)}
+          className="w-full border rounded-lg px-3 py-2 text-sm" />
+      </div>
+      <div>
+        <label className="block text-sm font-medium mb-1">Notas</label>
+        <textarea value={notes} onChange={e => setNotes(e.target.value)}
+          className="w-full border rounded-lg px-3 py-2 text-sm" rows={2} />
+      </div>
+      <div>
+        <label className="block text-sm font-medium mb-1">Archivo adjunto (aplica a todo el lote)</label>
+        <input type="file" accept="image/*,.pdf" onChange={e => setFile(e.target.files[0] || null)}
+          className="w-full border rounded-lg px-3 py-2 text-sm" />
+      </div>
+      <div className="flex gap-3 pt-2">
+        <button type="submit" disabled={saving || selectedItems.length === 0}
+          className="flex-1 bg-blue-600 text-white rounded-lg py-2.5 font-medium hover:bg-blue-700 disabled:opacity-50">
+          {saving ? 'Guardando...' : `Registrar lote (${selectedItems.length} artículos)`}
+        </button>
+        <button type="button" onClick={onClose} className="px-4 py-2.5 border rounded-lg hover:bg-gray-50">Cancelar</button>
+      </div>
+    </form>
+  )
+}
+
+function BatchDeliveryForm({ items, area, onClose, onSaved }) {
+  const eligible = items.filter(i => i.qty_in_warehouse > 0)
+  const [selected, setSelected] = useState(() => Object.fromEntries(eligible.map(i => [i.item_id, true])))
+  const [qtys, setQtys] = useState(() => Object.fromEntries(eligible.map(i => [i.item_id, i.qty_in_warehouse])))
+  const [date, setDate] = useState(new Date().toISOString().split('T')[0])
+  const [deliveredBy, setDeliveredBy] = useState('')
+  const [receivedByMarriott, setReceivedByMarriott] = useState('')
+  const [file, setFile] = useState(null)
+  const [notes, setNotes] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  const selectedItems = eligible.filter(i => selected[i.item_id])
+  const totalQty = selectedItems.reduce((sum, i) => sum + (parseInt(qtys[i.item_id]) || 0), 0)
+  const allSelected = eligible.length > 0 && eligible.every(i => selected[i.item_id])
+
+  function toggleAll() {
+    const v = !allSelected
+    setSelected(Object.fromEntries(eligible.map(i => [i.item_id, v])))
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    if (selectedItems.length === 0) { alert('Selecciona al menos un artículo'); return }
+    setSaving(true)
+
+    let document_url = null
+    if (file) {
+      const path = `delivery-batches/${Date.now()}_${file.name}`
+      const { error: uploadError } = await supabase.storage.from('documents').upload(path, file)
+      if (uploadError) { setSaving(false); alert('Error subiendo archivo: ' + uploadError.message); return }
+      document_url = supabase.storage.from('documents').getPublicUrl(path).data.publicUrl
+    }
+
+    const { data: batchData, error: batchError } = await supabase
+      .from('delivery_batches')
+      .insert({ delivered_date: date, delivered_by: deliveredBy || null, received_by_marriott: receivedByMarriott || null, document_url, notes: notes || null })
+      .select('id').single()
+    if (batchError) { setSaving(false); alert('Error creando lote: ' + batchError.message); return }
+
+    const { error: deliveriesError } = await supabase.from('deliveries').insert(
+      selectedItems.map(i => ({
+        item_id: i.item_id,
+        qty_delivered: parseInt(qtys[i.item_id]) || 0,
+        delivered_date: date,
+        delivered_by: deliveredBy || null,
+        received_by_marriott: receivedByMarriott || null,
+        batch_id: batchData.id,
+        document_url,
+      }))
+    )
+    setSaving(false)
+    if (deliveriesError) { alert('Error guardando entregas: ' + deliveriesError.message); return }
+    onSaved(); onClose()
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div>
+        <div className="flex justify-between items-center mb-2">
+          <span className="text-sm font-medium text-gray-700">Artículos en almacén ({eligible.length})</span>
+          <button type="button" onClick={toggleAll} className="text-xs text-blue-600 hover:underline">
+            {allSelected ? 'Deseleccionar todos' : 'Seleccionar todos'}
+          </button>
+        </div>
+        <div className="border rounded-lg divide-y max-h-60 overflow-y-auto">
+          {eligible.length === 0
+            ? <p className="text-sm text-gray-400 p-3">No hay artículos en almacén para entregar</p>
+            : eligible.map(item => (
+              <div key={item.item_id} className="flex items-center gap-3 p-2.5">
+                <input type="checkbox" checked={!!selected[item.item_id]}
+                  onChange={e => setSelected(s => ({ ...s, [item.item_id]: e.target.checked }))}
+                  className="h-4 w-4 rounded border-gray-300 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium truncate">{item.description}</div>
+                  <div className="text-xs text-gray-400">{item.code} · En almacén: {item.qty_in_warehouse}</div>
+                </div>
+                <input type="number" min="1" max={item.qty_in_warehouse}
+                  value={qtys[item.item_id] ?? ''}
+                  onChange={e => setQtys(q => ({ ...q, [item.item_id]: e.target.value }))}
+                  disabled={!selected[item.item_id]}
+                  className="w-20 border rounded px-2 py-1 text-sm text-center disabled:opacity-40 shrink-0" />
+              </div>
+            ))
+          }
+        </div>
+      </div>
+
+      <div className="bg-green-50 rounded-lg px-3 py-2 text-sm text-green-700 font-medium">
+        {selectedItems.length} artículos seleccionados · {totalQty} unidades totales
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="block text-sm font-medium mb-1">Fecha de entrega</label>
+          <input type="date" value={date} onChange={e => setDate(e.target.value)}
+            className="w-full border rounded-lg px-3 py-2 text-sm" />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Entregó (Woodpecker)</label>
+          <input type="text" value={deliveredBy} onChange={e => setDeliveredBy(e.target.value)}
+            className="w-full border rounded-lg px-3 py-2 text-sm" />
+        </div>
+      </div>
+      <div>
+        <label className="block text-sm font-medium mb-1">Recibió (Marriott)</label>
+        <input type="text" value={receivedByMarriott} onChange={e => setReceivedByMarriott(e.target.value)}
+          className="w-full border rounded-lg px-3 py-2 text-sm" />
+      </div>
+      <div>
+        <label className="block text-sm font-medium mb-1">Notas</label>
+        <textarea value={notes} onChange={e => setNotes(e.target.value)}
+          className="w-full border rounded-lg px-3 py-2 text-sm" rows={2} />
+      </div>
+      <div>
+        <label className="block text-sm font-medium mb-1">Remisión firmada (aplica a todo el lote)</label>
+        <input type="file" accept="image/*,.pdf" onChange={e => setFile(e.target.files[0] || null)}
+          className="w-full border rounded-lg px-3 py-2 text-sm" />
+      </div>
+      <div className="flex gap-3 pt-2">
+        <button type="submit" disabled={saving || selectedItems.length === 0}
+          className="flex-1 bg-green-600 text-white rounded-lg py-2.5 font-medium hover:bg-green-700 disabled:opacity-50">
+          {saving ? 'Guardando...' : `Registrar lote (${selectedItems.length} artículos)`}
+        </button>
+        <button type="button" onClick={onClose} className="px-4 py-2.5 border rounded-lg hover:bg-gray-50">Cancelar</button>
+      </div>
+    </form>
+  )
+}
+
 function ItemHistory({ item, onClose }) {
   const [receipts, setReceipts] = useState([])
   const [deliveries, setDeliveries] = useState([])
@@ -237,8 +495,8 @@ function ItemHistory({ item, onClose }) {
   useEffect(() => {
     async function load() {
       const [r, d] = await Promise.all([
-        supabase.from('receipts').select('*').eq('item_id', item.item_id).order('received_date', { ascending: false }),
-        supabase.from('deliveries').select('*').eq('item_id', item.item_id).order('delivered_date', { ascending: false }),
+        supabase.from('receipts').select('*, batch:receipt_batches(batch_number)').eq('item_id', item.item_id).order('received_date', { ascending: false }),
+        supabase.from('deliveries').select('*, batch:delivery_batches(batch_number)').eq('item_id', item.item_id).order('delivered_date', { ascending: false }),
       ])
       setReceipts(r.data || [])
       setDeliveries(d.data || [])
@@ -262,9 +520,12 @@ function ItemHistory({ item, onClose }) {
           <div className="space-y-2">
             {receipts.map(r => (
               <div key={r.id} className="border rounded-lg p-3 text-sm">
-                <div className="flex justify-between">
+                <div className="flex justify-between flex-wrap gap-1">
                   <span className="font-medium">{r.qty_received} unidades</span>
-                  <span className="text-gray-500">{r.received_date}</span>
+                  <div className="flex gap-2 text-gray-500">
+                    {r.batch?.batch_number && <span className="text-blue-600 font-medium">Lote #{r.batch.batch_number}</span>}
+                    <span>{r.received_date}</span>
+                  </div>
                 </div>
                 {r.received_by && <div className="text-gray-500">Recibió: {r.received_by}</div>}
                 {r.invoice_ref && <div className="text-gray-500">Ref: {r.invoice_ref}</div>}
@@ -286,9 +547,12 @@ function ItemHistory({ item, onClose }) {
           <div className="space-y-2">
             {deliveries.map(d => (
               <div key={d.id} className="border rounded-lg p-3 text-sm">
-                <div className="flex justify-between">
+                <div className="flex justify-between flex-wrap gap-1">
                   <span className="font-medium">{d.qty_delivered} unidades</span>
-                  <span className="text-gray-500">{d.delivered_date}</span>
+                  <div className="flex gap-2 text-gray-500">
+                    {d.batch?.batch_number && <span className="text-green-600 font-medium">Lote #{d.batch.batch_number}</span>}
+                    <span>{d.delivered_date}</span>
+                  </div>
                 </div>
                 {d.delivered_by && <div className="text-gray-500">Entregó: {d.delivered_by}</div>}
                 {d.received_by_marriott && <div className="text-gray-500">Recibió Marriott: {d.received_by_marriott}</div>}
@@ -593,6 +857,11 @@ export default function Home() {
     setModalType(type)
   }
 
+  function openBatchModal(type) {
+    setModalItem({ _batch: true })
+    setModalType(type)
+  }
+
   function closeModal() {
     setModalItem(null)
     setModalType(null)
@@ -725,8 +994,22 @@ export default function Home() {
             </select>
           </div>
 
-          <div className="text-sm text-gray-500 mb-3">
-            {filteredAreaItems.length} artículos{search || statusFilter ? ' (filtrados)' : ''}
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-sm text-gray-500">
+              {filteredAreaItems.length} artículos{search || statusFilter ? ' (filtrados)' : ''}
+            </div>
+            {selectedArea && (
+              <div className="flex gap-2">
+                <button onClick={() => openBatchModal('batch-receipt')}
+                  className="text-sm bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 font-medium">
+                  📦 Recepción por lote
+                </button>
+                <button onClick={() => openBatchModal('batch-delivery')}
+                  className="text-sm bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700 font-medium">
+                  🏨 Entrega por lote
+                </button>
+              </div>
+            )}
           </div>
 
           <ItemsTable items={filteredAreaItems} onOpen={openModal} />
@@ -737,10 +1020,13 @@ export default function Home() {
       <Modal
         open={!!modalItem}
         onClose={closeModal}
+        wide={modalType === 'batch-receipt' || modalType === 'batch-delivery'}
         title={
           modalType === 'receipt' ? '📦 Registrar recepción en almacén' :
           modalType === 'delivery' ? '🏨 Registrar entrega a Marriott' :
           modalType === 'edit' ? '✏️ Editar artículo' :
+          modalType === 'batch-receipt' ? `📦 Recepción por lote — ${selectedArea}` :
+          modalType === 'batch-delivery' ? `🏨 Entrega por lote a Marriott — ${selectedArea}` :
           '📋 Historial de movimientos'
         }
       >
@@ -752,6 +1038,12 @@ export default function Home() {
         )}
         {modalItem && modalType === 'edit' && (
           <EditItemForm item={modalItem} onClose={closeModal} onSaved={loadData} />
+        )}
+        {modalItem && modalType === 'batch-receipt' && (
+          <BatchReceiptForm items={filteredAreaItems} area={selectedArea} onClose={closeModal} onSaved={loadData} />
+        )}
+        {modalItem && modalType === 'batch-delivery' && (
+          <BatchDeliveryForm items={filteredAreaItems} area={selectedArea} onClose={closeModal} onSaved={loadData} />
         )}
         {modalItem && modalType === 'history' && (
           <ItemHistory item={modalItem} onClose={closeModal} />
