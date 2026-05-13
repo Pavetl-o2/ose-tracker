@@ -550,7 +550,7 @@ export default function Home() {
     revisar: items.filter(i => i.status === 'revisar').length,
   }
 
-  const areaItems = selectedArea ? items.filter(i => i.area === selectedArea) : []
+  const areaItems = selectedArea ? items.filter(i => i.area === selectedArea) : items
 
   const filteredAreaItems = areaItems.filter(i => {
     if (statusFilter && i.status !== statusFilter) return false
@@ -571,6 +571,13 @@ export default function Home() {
     setSelectedArea(area)
     setSearch('')
     setStatusFilter('')
+    setView('items')
+  }
+
+  function openGlobalStatus(status) {
+    setSelectedArea(null)
+    setSearch('')
+    setStatusFilter(status)
     setView('items')
   }
 
@@ -612,8 +619,12 @@ export default function Home() {
               <button onClick={backToAreas} className="text-sm text-blue-600 hover:underline mb-1 flex items-center gap-1">
                 ← Todas las áreas
               </button>
-              <h1 className="text-2xl font-bold text-gray-900">{selectedArea}</h1>
-              <p className="text-gray-500 text-sm">{areaItems.length} artículos en esta área</p>
+              <h1 className="text-2xl font-bold text-gray-900">
+                {selectedArea || (statusFilter ? STATUS_LABELS[statusFilter] : 'Todos los artículos')}
+              </h1>
+              <p className="text-gray-500 text-sm">
+                {selectedArea ? `${areaItems.length} artículos en esta área` : `${areaItems.length} artículos en total`}
+              </p>
             </div>
           ) : (
             <div>
@@ -627,45 +638,32 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Global stats (always visible) */}
-      <div className="grid grid-cols-4 md:grid-cols-8 gap-2 mb-6">
-        <div className="bg-white border rounded-lg p-3 text-center">
-          <div className="text-xl font-bold">{globalStats.total}</div>
-          <div className="text-xs text-gray-500">Total</div>
-        </div>
-        {globalStats.sin_pedido > 0 && (
-          <div className="bg-gray-100 border rounded-lg p-3 text-center">
-            <div className="text-xl font-bold text-gray-600">{globalStats.sin_pedido}</div>
-            <div className="text-xs text-gray-500">Sin pedido</div>
+      {/* Global stats (always visible, clickable) */}
+      {(() => {
+        const activeStatus = view === 'items' && !selectedArea ? statusFilter : null
+        const btn = (status, count, colorClass, textClass, label) => (
+          <button
+            key={status}
+            onClick={() => status ? openGlobalStatus(status) : (backToAreas())}
+            className={`${colorClass} rounded-lg p-3 text-center transition-all hover:shadow-md hover:scale-[1.02] ${activeStatus === status ? 'ring-2 ring-offset-1 ring-blue-500' : ''}`}
+          >
+            <div className={`text-xl font-bold ${textClass}`}>{count}</div>
+            <div className={`text-xs ${textClass} opacity-80`}>{label}</div>
+          </button>
+        )
+        return (
+          <div className="grid grid-cols-4 md:grid-cols-8 gap-2 mb-6">
+            {btn('', globalStats.total, 'bg-white border', 'text-gray-800', 'Total')}
+            {globalStats.sin_pedido > 0 && btn('sin_pedido', globalStats.sin_pedido, 'bg-gray-100 border', 'text-gray-600', 'Sin pedido')}
+            {btn('no_recibido', globalStats.no_recibido, 'bg-red-50 border border-red-200', 'text-red-700', 'No recibido')}
+            {btn('recepcion_parcial', globalStats.recepcion_parcial, 'bg-amber-50 border border-amber-200', 'text-amber-700', 'Rec. parcial')}
+            {btn('en_almacen', globalStats.en_almacen, 'bg-blue-50 border border-blue-200', 'text-blue-700', 'En almacén')}
+            {btn('entrega_parcial', globalStats.entrega_parcial, 'bg-emerald-50 border border-emerald-200', 'text-emerald-700', 'Entrega parcial')}
+            {btn('entregado_completo', globalStats.entregado_completo, 'bg-green-100 border border-green-300', 'text-green-700', 'Entregado')}
+            {globalStats.revisar > 0 && btn('revisar', globalStats.revisar, 'bg-purple-50 border border-purple-200', 'text-purple-700', 'Revisar')}
           </div>
-        )}
-        <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-center">
-          <div className="text-xl font-bold text-red-700">{globalStats.no_recibido}</div>
-          <div className="text-xs text-red-500">No recibido</div>
-        </div>
-        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-center">
-          <div className="text-xl font-bold text-amber-700">{globalStats.recepcion_parcial}</div>
-          <div className="text-xs text-amber-500">Rec. parcial</div>
-        </div>
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-center">
-          <div className="text-xl font-bold text-blue-700">{globalStats.en_almacen}</div>
-          <div className="text-xs text-blue-500">En almacén</div>
-        </div>
-        <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-center">
-          <div className="text-xl font-bold text-emerald-700">{globalStats.entrega_parcial}</div>
-          <div className="text-xs text-emerald-500">Entrega parcial</div>
-        </div>
-        <div className="bg-green-100 border border-green-300 rounded-lg p-3 text-center">
-          <div className="text-xl font-bold text-green-700">{globalStats.entregado_completo}</div>
-          <div className="text-xs text-green-600">Entregado</div>
-        </div>
-        {globalStats.revisar > 0 && (
-          <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 text-center">
-            <div className="text-xl font-bold text-purple-700">{globalStats.revisar}</div>
-            <div className="text-xs text-purple-500">Revisar</div>
-          </div>
-        )}
-      </div>
+        )
+      })()}
 
       {view === 'areas' && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
