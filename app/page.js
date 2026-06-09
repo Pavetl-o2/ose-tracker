@@ -796,7 +796,9 @@ export default function Home() {
       if (!data || data.length < 1000) break
       from += 1000
     }
-    setItems(all)
+    // Deduplicate by item_id — guards against duplicate rows in the DB
+    const unique = Array.from(new Map(all.map(i => [i.item_id, i])).values())
+    setItems(unique)
     setLoading(false)
   }, [])
 
