@@ -720,6 +720,7 @@ function ItemsTable({ items, onOpen }) {
         <thead>
           <tr className="border-b bg-gray-50">
             <th className="text-left p-3 font-semibold">Código</th>
+            <th className="text-left p-3 font-semibold hidden md:table-cell">Item Code</th>
             <th className="text-left p-3 font-semibold">Descripción</th>
             <th className="text-left p-3 font-semibold hidden lg:table-cell">Marca</th>
             <th className="text-left p-3 font-semibold hidden lg:table-cell">Proveedor</th>
@@ -735,10 +736,10 @@ function ItemsTable({ items, onOpen }) {
           {items.map(item => (
             <tr key={item.item_id} className="border-b hover:bg-gray-50 transition-colors">
               <td className="p-3 font-mono text-xs">{item.code}</td>
+              <td className="p-3 hidden md:table-cell font-mono text-xs text-gray-500">{item.item_code}</td>
               <td className="p-3">
                 <button onClick={() => onOpen(item, 'history')} className="text-left hover:text-blue-600">
                   <div className="font-medium leading-tight">{item.description}</div>
-                  <div className="text-xs text-gray-400">{item.item_code}</div>
                 </button>
               </td>
               <td className="p-3 hidden lg:table-cell text-xs">{item.brand_current}</td>
