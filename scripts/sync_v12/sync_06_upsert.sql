@@ -2,6 +2,11 @@
 -- PASO 6: UPSERT items 1201-1479 de 1479 (actualiza o inserta)
 -- ================================================================
 
+-- Crear el área '5th Resident Lounge' si no existe (96 items la usan)
+INSERT INTO areas (name)
+SELECT '5th Resident Lounge'
+WHERE NOT EXISTS (SELECT 1 FROM areas WHERE name = '5th Resident Lounge');
+
 INSERT INTO items (code, item_code, description, description_2, area_id, brand_current, supplier, category, item_type, qty_ordered)
 VALUES
   ('1078', '12272/02', 'Bitter / Dash Bottle', '10 cl - 3 ½ oz h 13.5 cm - 5 3 ⁄8” Max Ø 5.7 cm - 2 ¼”', (SELECT id FROM areas WHERE name = 'Mexican Izakaya' LIMIT 1), 'Luigi Bormioli', 'Proepta', 'Mexican Izakaya | FOH Bar', 'UTENSILIOS', 3),
