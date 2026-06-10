@@ -790,7 +790,7 @@ export default function Home() {
     let all = []
     let from = 0
     while (true) {
-      const { data, error } = await supabase.from('inventory_status').select('*').range(from, from + 999)
+      const { data, error } = await supabase.from('inventory_status').select('*').order('item_id', { ascending: true }).range(from, from + 999)
       if (error) { console.error(error); break }
       all = [...all, ...(data || [])]
       if (!data || data.length < 1000) break
