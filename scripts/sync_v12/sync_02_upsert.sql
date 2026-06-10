@@ -57,7 +57,7 @@ Lampshade diameter: 18 cm', (SELECT id FROM areas WHERE name = 'Three Meal' LIMI
   ('336', NULL, 'Dinner fork with a natural bamboo handle', '22 cm', (SELECT id FROM areas WHERE name = 'Three Meal' LIMIT 1), 'Maison Margaux', 'Maison Margaux', 'Custom Silverware', NULL, 377),
   ('339', NULL, 'Soup Spoon wit a a natural bamboo handle', '22cm', (SELECT id FROM areas WHERE name = 'Three Meal' LIMIT 1), 'Maison Margaux', 'Maison Margaux', 'Custom Silverware', NULL, 377),
   ('341', NULL, 'Dessert spoon with a a natural bamboo handle', '19 cm', (SELECT id FROM areas WHERE name = 'Three Meal' LIMIT 1), 'Maison Margaux', 'Maison Margaux', 'Custom Silverware', NULL, 377),
-  ('441', NULL, NULL, NULL, (SELECT id FROM areas WHERE name = 'Three Meal' LIMIT 1), 'Pantheon', 'Pantheon', '36" wooden bag stand', 'UTENSILIOS', 28),
+  ('441', NULL, '36" wooden bag stand', NULL, (SELECT id FROM areas WHERE name = 'Three Meal' LIMIT 1), 'Pantheon', 'Pantheon', NULL, 'UTENSILIOS', 28),
   ('373', NULL, 'Organic-shaped ceramic bowl in Wabi Blanc glaze.', 'Buffet Display/ Breakfast', (SELECT id FROM areas WHERE name = 'Three Meal' LIMIT 1), 'Maison Margaux', 'Maison Margaux', 'Custom production', NULL, 200),
   ('383', NULL, 'Ceramic dinner plate with a Helecho (fern) design in deep teal. Handmade in South America.', 'Breakfast', (SELECT id FROM areas WHERE name = 'Three Meal' LIMIT 1), 'Maison Margaux', 'Maison Margaux', 'Custom production', NULL, 250),
   ('342', NULL, 'English tea spoon with a natural bamboo handle', '13 cm', (SELECT id FROM areas WHERE name = 'Three Meal' LIMIT 1), 'Maison Margaux', 'Maison Margaux', 'Custom Silverware', NULL, 377),
@@ -173,7 +173,7 @@ H 1 7/8" (14 3/4 oz)', NULL, (SELECT id FROM areas WHERE name = 'Three Meal' LIM
 
 L 6 1/8" W 4 3/4"
 H 1 3/4" (11 1/2 oz)', NULL, (SELECT id FROM areas WHERE name = 'Three Meal' LIMIT 1), 'Steelite', 'Steelite', 'Miniature 3 Cast Iron', 'UTENSILIOS', 72),
-  ('440', NULL, NULL, NULL, (SELECT id FROM areas WHERE name = 'Three Meal' LIMIT 1), 'Pantheon', 'Pantheon', 'Wooden Tray Jack', 'UTENSILIOS', 12),
+  ('440', NULL, 'Wooden Tray Jack', NULL, (SELECT id FROM areas WHERE name = 'Three Meal' LIMIT 1), 'Pantheon', 'Pantheon', NULL, 'UTENSILIOS', 12),
   ('368', NULL, 'Modern teapot crafted from heat-resistant glass and stainless steel. Includes a built-in strainer for loose-leaf tea brewing.', 'Tea / Coffe Service', (SELECT id FROM areas WHERE name = 'Three Meal' LIMIT 1), 'Maison Margaux', 'Maison Margaux', 'Custom production', NULL, 49),
   ('493', 'BU_RR6103', 'Tilt Tall Stainless Steel Frame •
 Mat Stainless Steel
